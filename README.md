@@ -9,7 +9,7 @@ Command-line tools for reading, parsing, and exporting TDX (通达信) market da
 cd ~/tdxcli
 
 # Install Python dependencies
-pip install pandas pyarrow mootdx pytdx sqlalchemy psycopg2-binary
+pip install pandas pyarrow mootdx pytdx sqlalchemy psycopg2-binary markitdown
 ```
 
 Or install as a package (when published):
@@ -17,6 +17,26 @@ Or install as a package (when published):
 ```bash
 pip install tdxcli
 ```
+
+## Bonus: markitdown Wrapper
+
+`scripts/markitdown.py` is a wrapper for [Microsoft markitdown](https://github.com/microsoft/markitdown) that fixes Chinese encoding issues on Windows.
+
+**Problem:** markitdown outputs GBK-encoded text, causing Chinese characters to display as garbled text in terminals.
+
+**Solution:** This wrapper automatically converts output to UTF-8.
+
+```bash
+# Convert Office/PDF to Markdown (with proper Chinese display)
+python scripts/markitdown.py document.pdf -o output.md
+python scripts/markitdown.py report.docx -o report.md
+
+# Supported formats: PDF, DOCX, XLSX, PPTX, HTML, EML, MSG, RTF
+```
+
+## Encoding Notes
+
+All scripts handle Chinese encoding automatically (TDX uses GBK internally).
 
 ## Quick Start
 
