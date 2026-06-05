@@ -5,7 +5,7 @@ parse_day.py -- Standalone TDX binary file parser.
 Lightweight utility to dump a single .day / .lc1 / .lc5 file to stdout.
 Use as:  python parse_day.py <file> [--csv]
 
-Python 3.10+ required (structural pattern matching, PosixPath).
+Python 3.10+ required.
 """
 
 from __future__ import annotations
@@ -24,7 +24,16 @@ from typing import Iterator
 # ---------------------------------------------------------------------------
 
 RECORD_SIZE = 32
-TDX_STRUCT = struct.Struct("<I6fI4x")  # date, 6 floats, reserve (4 bytes padding)
+# TDX .day format (32 bytes per record, little-endian):
+# 0-3:   date (uint32, YYYYMMDD)
+# 4-7:   open (uint32, price x 100)
+# 8-11:  high (uint32, price x 100)
+# 12-15: low (uint32, price x 100)
+# 16-19: close (uint32, price x 100)
+# 20-23: amount (float32, 成交额)
+# 24-27: volume (uint32, 成交量)
+# 28-31: reserved (4 bytes padding)
+TDX_STRUCT = struct.Struct("<I I I I I f I 4x")
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +48,7 @@ class DayBar:
     low: float
     close: float
     amount: float
-    volume: float
+    volume: int
 
     @property
     def date_iso(self) -> str:
@@ -50,12 +59,12 @@ class DayBar:
         return {
             "date": self.date,
             "date_iso": self.date_iso,
-            "open": self.open,
-            "high": self.high,
-            "low": self.low,
-            "close": self.close,
+            "open": self.open / 100.0,
+            "high": self.high / 100.0,
+            "low": self.low / 100.0,
+            "close": self.close / 100.0,
             "amount": self.amount,
-            "volume": int(self.volume),
+            "volume": self.volume,
         }
 
 
@@ -79,7 +88,7 @@ def iter_records(path: Path) -> Iterator[DayBar]:
             low=float(values[3]),
             close=float(values[4]),
             amount=float(values[5]),
-            volume=float(values[6]),
+            volume=int(values[6]),
         )
 
 
@@ -94,10 +103,11 @@ def print_table(records: list[DayBar]) -> None:
     print(header)
     print(sep)
     for r in records:
+        d = r.dict()
         print(
-            f"{r.date_iso:>10}  {r.open:>10.3f}  {r.high:>10.3f}  "
-            f"{r.low:>10.3f}  {r.close:>10.3f}  {r.amount:>14.3f}  "
-            f"{int(r.volume):>12,}"
+            f"{r.date_iso:>10}  {d['open']:>10.2f}  {d['high']:>10.2f}  "
+            f"{d['low']:>10.2f}  {d['close']:>10.2f}  {d['amount']:>14.0f}  "
+            f"{d['volume']:>12,}"
         )
     print(sep)
     print(f"{len(records)} records")

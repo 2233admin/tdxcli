@@ -1,42 +1,12 @@
 # tdxcli
 
-Command-line tools for reading, parsing, and exporting TDX (通达信) market data files.
+Command-line tools for reading, parsing, exporting, analyzing, and screening TDX (通达信) market data.
 
 ## Installation
 
 ```bash
-# Clone or extract to ~/tdxcli
-cd ~/tdxcli
-
-# Install Python dependencies
-pip install pandas pyarrow mootdx pytdx sqlalchemy psycopg2-binary markitdown
+pip install pandas pyarrow mootdx pytdx sqlalchemy psycopg2-binary numpy
 ```
-
-Or install as a package (when published):
-
-```bash
-pip install tdxcli
-```
-
-## Bonus: markitdown Wrapper
-
-`scripts/markitdown.py` is a wrapper for [Microsoft markitdown](https://github.com/microsoft/markitdown) that fixes Chinese encoding issues on Windows.
-
-**Problem:** markitdown outputs GBK-encoded text, causing Chinese characters to display as garbled text in terminals.
-
-**Solution:** This wrapper automatically converts output to UTF-8.
-
-```bash
-# Convert Office/PDF to Markdown (with proper Chinese display)
-python scripts/markitdown.py document.pdf -o output.md
-python scripts/markitdown.py report.docx -o report.md
-
-# Supported formats: PDF, DOCX, XLSX, PPTX, HTML, EML, MSG, RTF
-```
-
-## Encoding Notes
-
-All scripts handle Chinese encoding automatically (TDX uses GBK internally).
 
 ## Quick Start
 
@@ -47,10 +17,10 @@ python scripts/tdxdata.py parse data/sh/600000.day
 # Export to CSV
 python scripts/tdxdata.py export data/sh/600000.day --format csv -o 600000.csv
 
-# Export to Parquet (fast, compressed)
+# Export to Parquet (compressed)
 python scripts/tdxdata.py export data/sh/600000.day --format parquet -o 600000.parquet
 
-# Batch process an entire market directory
+# Batch process all .day/.lc1/.lc5 files
 python scripts/tdxdata.py batch data/sh/ --output sh_parquet/ --format parquet
 
 # Real-time quote (requires pytdx)
@@ -59,112 +29,95 @@ python scripts/tdxdata.py quote 600000 sh
 # Import into PostgreSQL
 python scripts/tdxdata.py import data/sh/600000.day \
   --db postgresql://user:pass@localhost:5432/market \
-  --table stock_daily \
-  --auto-create
+  --table stock_daily --auto-create
+
+# Parse indicator formula (.sp file)
+python scripts/tdxdata.py formula C:/new_tdx64/funcs/AI_BIGDATA.sp
+
+# Parse financial data
+python scripts/tdxdata.py finance C:/new_tdx64/vipdoc/cw/gpbj920000.dat
+
+# Parse block/sector data
+python scripts/tdxdata.py block C:/new_tdx64/T0002/blocknew
+
+# Calculate technical indicators (MA/MACD/RSI/KDJ/BOLL)
+python scripts/tdxdata.py indicator 600036 --market sh --tail 20
+
+# Stock screening
+python scripts/tdxdata.py screen --ma-cross --rsi-oversold
+python scripts/tdxdata.py screen --macd-cross --volume-surge --min-price 10
+
+# Compare multiple stocks
+python scripts/tdxdata.py compare 600036 601318 600519 --market sh --period 20
 ```
 
 ## Command Reference
 
-### `parse`
+| Command | Description |
+|---------|-------------|
+| `parse` | Parse and display a TDX binary file |
+| `export` | Convert to CSV, Parquet, or JSON |
+| `batch` | Process all TDX files in a directory (supports .day/.lc1/.lc5) |
+| `quote` | Fetch real-time quotes via pytdx |
+| `import` | Upsert records into PostgreSQL |
+| `formula` | Parse indicator formula (.sp files) |
+| `finance` | Parse financial data files |
+| `block` | Parse block/sector data |
+| `indicator` | Calculate technical indicators |
+| `screen` | Condition-based stock screening |
+| `compare` | Compare multiple stocks |
 
-Parse and display a TDX binary file as a human-readable table.
+## Technical Indicators
 
-```bash
-python scripts/tdxdata.py parse <file>
-```
+The `indicator` command calculates:
 
-### `export`
+| Indicator | Description |
+|-----------|-------------|
+| MA5/10/20/60 | Moving averages |
+| MACD (DIF/DEA/MACD) | Moving Average Convergence Divergence |
+| RSI6/RSI14 | Relative Strength Index |
+| KDJ (K/D/J) | Stochastic oscillator |
+| BOLL (UP/MID/LOW) | Bollinger Bands |
 
-Convert a TDX file to CSV, Parquet, or JSON.
+## Stock Screening Conditions
 
-```bash
-python scripts/tdxdata.py export <file> -f csv|parquet|json -o <output>
-```
-
-| Format | Best for | Notes |
-|--------|----------|-------|
-| `csv` | Human inspection, small datasets | Plain text, portable |
-| `parquet` | Large datasets, analytics | Columnar, compressed, ~10x smaller than CSV |
-| `json` | Interop with web tools | Larger than CSV, human-readable |
-
-### `batch`
-
-Process all `.day` files in a directory recursively.
-
-```bash
-python scripts/tdxdata.py batch <dir> -o <output_dir> -f csv|parquet|json [-m sh|sz]
-```
-
-### `quote`
-
-Fetch real-time quotes via pytdx.
-
-```bash
-python scripts/tdxdata.py quote <code> <market>
-# Example
-python scripts/tdxdata.py quote 600000 sh
-```
-
-### `import`
-
-Upsert TDX records into a PostgreSQL table (creates table with `--auto-create`).
-
-```bash
-python scripts/tdxdata.py import <file> \
-  --db postgresql://user:pass@localhost:5432/db \
-  --table stock_daily \
-  --auto-create
-```
-
-## Standalone Script: parse_day.py
-
-A lightweight alternative for quick inspection:
-
-```bash
-python scripts/parse_day.py data/sh/600000.day
-python scripts/parse_day.py data/sh/600000.day --csv 600000.csv
-```
-
-## Data Directory
-
-By default, file paths are relative to the current working directory.
-Use `--data-path` to specify a custom root:
-
-```bash
-python scripts/tdxdata.py parse 600000.day --data-path /mnt/tdx/vipdoc
-# Resolves to /mnt/tdx/vipdoc/600000.day
-```
+| Flag | Description |
+|------|-------------|
+| `--ma-cross` | MA5 crosses above MA10 (golden cross) |
+| `--macd-cross` | MACD golden cross |
+| `--rsi-oversold` | RSI14 < 30 |
+| `--rsi-overbought` | RSI14 > 70 |
+| `--volume-surge` | Volume > 2x 5-day average |
+| `--min-change N` | Daily gain >= N% |
+| `--max-change N` | Daily drop >= N% |
+| `--min-price N` | Price >= N |
+| `--max-price N` | Price <= N |
 
 ## TDX File Format
 
-Each `.day` file is a sequence of **32-byte records**:
+Each `.day` file is a sequence of **32-byte records** (little-endian):
 
-```
-Offset  Field     Type    Description
-------  --------- ------  -------------
-0       date      uint32  Packed date (YYYYMMDD)
-4       open      float   Opening price
-8       high     float   Highest price
-12      low      float   Lowest price
-16      close    float   Closing price
-20      amount   float   Turnover amount
-24      volume   float   Volume in lots
-28      reserve  float   Padding
-```
-
-See `references/tdx_format.md` for the full specification.
+| Offset | Type | Field | Description |
+|--------|------|-------|-------------|
+| 0 | uint32 | date | Packed YYYYMMDD |
+| 4 | uint32 | open | Price x 100 |
+| 8 | uint32 | high | Price x 100 |
+| 12 | uint32 | low | Price x 100 |
+| 16 | uint32 | close | Price x 100 |
+| 20 | double | amount | Turnover (RMB) |
+| 28 | uint32 | volume | Volume (lots) |
 
 ## Data Sources
 
-- **mootdx**: Read local `.day` files and remote HTTP sources.
-  Default path: `~/.mootdx/`
-- **pytdx**: Real-time quotes from TDX quote servers (port 7709).
+- **Local files**: `vipdoc/{sh,sz}/lday/*.day`, `vipdoc/{sh,sz}/minline/*.lc1`, `vipdoc/{sh,sz}/fzline/*.lc5`
+- **mootdx**: Read local files + remote HTTP
+- **pytdx**: Real-time quotes from TDX servers (port 7709)
 
 ## Requirements
 
 - Python 3.10+
-- pandas
-- pyarrow (for Parquet export)
-- mootdx (for file parsing)
-- pytdx (for real-time quotes)
-- sqlalchemy + psycopg2-binary (for PostgreSQL import)
+- pandas, numpy
+- pyarrow (Parquet)
+- mootdx (local file reading)
+- pytdx (real-time quotes)
+- sqlalchemy + psycopg2-binary (PostgreSQL import)
