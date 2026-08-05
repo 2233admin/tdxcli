@@ -32,13 +32,15 @@ import pandas as pd
 
 # Optional dependencies
 try:
-    from pytdx.hq import TdxHq_API
+    from pytdx.hq import TdxHq_API  # type: ignore[import-untyped]
+
     PYTDX_AVAILABLE = True
 except ImportError:
     PYTDX_AVAILABLE = False
 
 try:
     from sqlalchemy import create_engine, text
+
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
@@ -66,16 +68,18 @@ TDX_DATA_ROOT = Path(os.environ.get("TDX_DATA_ROOT", "C:/new_tdx64"))
 # Data model
 # ============================================================================
 
+
 @dataclass
 class TdxRecord:
     """Single row from a TDX binary file."""
-    date: int          # YYYYMMDD
-    open: float        # raw (x100)
+
+    date: int  # YYYYMMDD
+    open: float  # raw (x100)
     high: float
     low: float
     close: float
-    amount: float      # 成交额
-    volume: int        # 成交量
+    amount: float  # 成交额
+    volume: int  # 成交量
 
     def date_str(self) -> str:
         d = str(self.date)
@@ -97,6 +101,7 @@ class TdxRecord:
 # ============================================================================
 # Core parsing
 # ============================================================================
+
 
 def unpack_record(data: bytes) -> TdxRecord:
     values = TDX_STRUCT.unpack(data)
@@ -121,7 +126,9 @@ def parse_tdx_file(path: Path) -> list[TdxRecord]:
         raise ValueError(
             f"File size ({len(raw)} bytes) is not a multiple of {RECORD_SIZE}."
         )
-    records = [unpack_record(raw[i:i+RECORD_SIZE]) for i in range(0, len(raw), RECORD_SIZE)]
+    records = [
+        unpack_record(raw[i : i + RECORD_SIZE]) for i in range(0, len(raw), RECORD_SIZE)
+    ]
     records.sort(key=lambda r: r.date)
     return records
 
@@ -134,18 +141,23 @@ def records_to_dataframe(records: list[TdxRecord]) -> pd.DataFrame:
 # Subcommand: parse
 # ============================================================================
 
+
 def cmd_parse(args: argparse.Namespace) -> int:
     records = parse_tdx_file(Path(args.file))
     if not records:
         print("No records found.")
         return 0
-    print(f"{'Date':>10}  {'Open':>10}  {'High':>10}  {'Low':>10}  "
-          f"{'Close':>10}  {'Amount':>14}  {'Volume':>12}")
+    print(
+        f"{'Date':>10}  {'Open':>10}  {'High':>10}  {'Low':>10}  "
+        f"{'Close':>10}  {'Amount':>14}  {'Volume':>12}"
+    )
     print("-" * 80)
     for r in records:
-        print(f"{r.date_str():>10}  {r.open/100:>10.2f}  {r.high/100:>10.2f}  "
-              f"{r.low/100:>10.2f}  {r.close/100:>10.2f}  {r.amount:>14.0f}  "
-              f"{r.volume:>12,d}")
+        print(
+            f"{r.date_str():>10}  {r.open / 100:>10.2f}  {r.high / 100:>10.2f}  "
+            f"{r.low / 100:>10.2f}  {r.close / 100:>10.2f}  {r.amount:>14.0f}  "
+            f"{r.volume:>12,d}"
+        )
     print(f"\nTotal: {len(records)} records")
     return 0
 
@@ -185,7 +197,7 @@ TDX_EXTENSIONS = {"*.day", "*.lc1", "*.lc5"}
 
 def _collect_files(data_dir: Path, market: str | None) -> list[Path]:
     base = data_dir / market if market else data_dir
-    files = []
+    files: list[Path] = []
     for ext in TDX_EXTENSIONS:
         files.extend(base.rglob(ext))
     if market:
@@ -241,6 +253,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
 # Subcommand: quote
 # ============================================================================
 
+
 def cmd_quote(args: argparse.Namespace) -> int:
     if not PYTDX_AVAILABLE:
         print("pytdx not installed. Run: pip install pytdx")
@@ -252,7 +265,9 @@ def cmd_quote(args: argparse.Namespace) -> int:
     api = TdxHq_API(heartbeat=True, auto_retry=True)
     try:
         with api.connect():
-            data = api.get_security_bars(category=9, market=market_id, code=code, start=0, count=10)
+            data = api.get_security_bars(
+                category=9, market=market_id, code=code, start=0, count=10
+            )
         if not data:
             print("No quote data returned.")
             return 1
@@ -272,6 +287,7 @@ def cmd_quote(args: argparse.Namespace) -> int:
 # ============================================================================
 # Subcommand: import
 # ============================================================================
+
 
 def cmd_import(args: argparse.Namespace) -> int:
     if not SQLALCHEMY_AVAILABLE:
@@ -311,17 +327,16 @@ def cmd_import(args: argparse.Namespace) -> int:
         print(f"Table '{table}' ready.")
 
     with engine.begin() as conn:
-        for _, row in df.iterrows():
-            conn.execute(
-                text(f"""
-                    INSERT INTO {table} (code, market, date, open, high, low, close, amount, volume)
-                    VALUES (:code, :market, :date, :open, :high, :low, :close, :amount, :volume)
-                    ON CONFLICT (code, market, date) DO UPDATE SET
-                        open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
-                        close=EXCLUDED.close, amount=EXCLUDED.amount, volume=EXCLUDED.volume
-                """),
-                row.to_dict(),
-            )
+        conn.execute(
+            text(f"""
+                INSERT INTO {table} (code, market, date, open, high, low, close, amount, volume)
+                VALUES (:code, :market, :date, :open, :high, :low, :close, :amount, :volume)
+                ON CONFLICT (code, market, date) DO UPDATE SET
+                    open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
+                    close=EXCLUDED.close, amount=EXCLUDED.amount, volume=EXCLUDED.volume
+            """),
+            df.to_dict("records"),  # type: ignore[arg-type]
+        )
     print(f"Imported {len(df)} rows into '{table}'.")
     return 0
 
@@ -329,6 +344,7 @@ def cmd_import(args: argparse.Namespace) -> int:
 # ============================================================================
 # Subcommand: formula (解析 .sp 指标公式)
 # ============================================================================
+
 
 def cmd_formula(args: argparse.Namespace) -> int:
     path = Path(args.file)
@@ -433,6 +449,7 @@ def cmd_finance(args: argparse.Namespace) -> int:
 # Subcommand: block (解析板块数据)
 # ============================================================================
 
+
 def parse_block_file(path: Path) -> list[str]:
     """解析板块成分股文件."""
     if not path.exists():
@@ -478,6 +495,7 @@ def cmd_block(args: argparse.Namespace) -> int:
 # Subcommand: indicator (计算技术指标)
 # ============================================================================
 
+
 def calc_ma(series: pd.Series, period: int) -> pd.Series:
     return series.rolling(window=period, min_periods=1).mean()
 
@@ -486,7 +504,9 @@ def calc_ema(series: pd.Series, period: int) -> pd.Series:
     return series.ewm(span=period, adjust=False).mean()
 
 
-def calc_macd(close: pd.Series, fast=12, slow=26, signal=9) -> tuple[pd.Series, pd.Series, pd.Series]:
+def calc_macd(
+    close: pd.Series, fast=12, slow=26, signal=9
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     ema_fast = calc_ema(close, fast)
     ema_slow = calc_ema(close, slow)
     dif = ema_fast - ema_slow
@@ -503,12 +523,14 @@ def calc_rsi(close: pd.Series, period=14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
-def calc_kdj(high: pd.Series, low: pd.Series, close: pd.Series, n=9, m1=3, m2=3) -> tuple:
+def calc_kdj(
+    high: pd.Series, low: pd.Series, close: pd.Series, n=9, m1=3, m2=3
+) -> tuple:
     lowest_low = low.rolling(window=n, min_periods=1).min()
     highest_high = high.rolling(window=n, min_periods=1).max()
     rsv = (close - lowest_low) / (highest_high - lowest_low) * 100
-    k = rsv.ewm(com=m1-1, adjust=False).mean()
-    d = k.ewm(com=m2-1, adjust=False).mean()
+    k = rsv.ewm(com=m1 - 1, adjust=False).mean()
+    d = k.ewm(com=m2 - 1, adjust=False).mean()
     j = 3 * k - 2 * d
     return k, d, j
 
@@ -530,7 +552,7 @@ def cmd_indicator(args: argparse.Namespace) -> int:
     # 尝试多种文件名格式
     patterns = [
         f"{market}{code}.day",  # sh600036.day
-        f"{code}.day",          # 600036.day
+        f"{code}.day",  # 600036.day
     ]
     data_file = None
     for pat in patterns:
@@ -562,8 +584,8 @@ def cmd_indicator(args: argparse.Namespace) -> int:
     low = df["low"]
 
     # 均线
-    for p in [5, 10, 20, 60]:
-        df[f"MA{p}"] = calc_ma(close, p)
+    for period in [5, 10, 20, 60]:
+        df[f"MA{period}"] = calc_ma(close, period)
 
     # MACD
     dif, dea, macd = calc_macd(close)
@@ -589,8 +611,22 @@ def cmd_indicator(args: argparse.Namespace) -> int:
 
     # 显示最近N条
     n = args.tail or 20
-    cols = ["date_str", "close", "MA5", "MA10", "MA20", "MA60",
-            "DIF", "DEA", "MACD", "RSI6", "RSI14", "K", "D", "J"]
+    cols = [
+        "date_str",
+        "close",
+        "MA5",
+        "MA10",
+        "MA20",
+        "MA60",
+        "DIF",
+        "DEA",
+        "MACD",
+        "RSI6",
+        "RSI14",
+        "K",
+        "D",
+        "J",
+    ]
     print(f"\n{market.upper()} {code} 技术指标 (最近{n}条):")
     print(df[cols].tail(n).to_string(index=False))
     return 0
@@ -599,6 +635,7 @@ def cmd_indicator(args: argparse.Namespace) -> int:
 # ============================================================================
 # Subcommand: screen (条件选股)
 # ============================================================================
+
 
 def screen_stock(records: list[TdxRecord], conditions: dict) -> dict | None:
     """检查单只股票是否满足条件."""
@@ -715,7 +752,9 @@ def cmd_screen(args: argparse.Namespace) -> int:
         conditions["max_price"] = args.max_price
 
     if not conditions:
-        print("No conditions specified. Use --ma-cross, --macd-cross, --rsi-oversold, etc.")
+        print(
+            "No conditions specified. Use --ma-cross, --macd-cross, --rsi-oversold, etc."
+        )
         return 1
 
     print("Screening conditions:", ", ".join(conditions.keys()))
@@ -742,13 +781,18 @@ def cmd_screen(args: argparse.Namespace) -> int:
             except Exception:
                 continue
             if scanned % 100 == 0:
-                print(f"  Scanned {market}/{code}... found {len(results)} matches", end="\r")
+                print(
+                    f"  Scanned {market}/{code}... found {len(results)} matches",
+                    end="\r",
+                )
 
     print(f"\n\nFound {len(results)} stocks matching conditions:")
     print(f"{'Code':>8}  {'Market':>4}  {'Close':>10}  {'Conditions'}")
     print("-" * 60)
     for r in sorted(results, key=lambda x: x["code"]):
-        print(f"{r['code']:>8}  {r['market']:>4}  {r['close']:>10.2f}  {', '.join(r['conditions'])}")
+        print(
+            f"{r['code']:>8}  {r['market']:>4}  {r['close']:>10.2f}  {', '.join(r['conditions'])}"
+        )
 
     return 0
 
@@ -756,6 +800,7 @@ def cmd_screen(args: argparse.Namespace) -> int:
 # ============================================================================
 # Subcommand: compare (多股对比)
 # ============================================================================
+
 
 def cmd_compare(args: argparse.Namespace) -> int:
     tdx_root = Path(args.data_path) if args.data_path else TDX_DATA_ROOT
@@ -815,11 +860,15 @@ def cmd_compare(args: argparse.Namespace) -> int:
         return 1
 
     # 输出对比表
-    print(f"\n{'Code':>8}  {'Close':>10}  {'Change%':>10}  {'Volume':>12}  {'MA5':>10}  {'RSI':>8}")
+    print(
+        f"\n{'Code':>8}  {'Close':>10}  {'Change%':>10}  {'Volume':>12}  {'MA5':>10}  {'RSI':>8}"
+    )
     print("-" * 70)
     for code, d in sorted(all_data.items()):
-        print(f"{code:>8}  {d['close']:>10.2f}  {d['change']:>+10.2f}%  {d['volume']:>12,.0f}  "
-              f"{d['ma5']:>10.2f}  {d['rsi']:>8.1f}")
+        print(
+            f"{code:>8}  {d['close']:>10.2f}  {d['change']:>+10.2f}%  {d['volume']:>12,.0f}  "
+            f"{d['ma5']:>10.2f}  {d['rsi']:>8.1f}"
+        )
 
     # 排名
     print("\n涨幅排名:")
@@ -835,13 +884,15 @@ def cmd_compare(args: argparse.Namespace) -> int:
 # CLI bootstrap
 # ============================================================================
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tdxdata",
         description="TDX (通达信) market data CLI",
     )
-    parser.add_argument("--data-path", metavar="PATH",
-                        help="Base path for TDX data files")
+    parser.add_argument(
+        "--data-path", metavar="PATH", help="Base path for TDX data files"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # parse
@@ -859,7 +910,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("dir")
     p.add_argument("--market", "-m", choices=["sh", "sz"])
     p.add_argument("--output", "-o", required=True)
-    p.add_argument("--format", "-f", default="parquet", choices=["csv", "parquet", "json"])
+    p.add_argument(
+        "--format", "-f", default="parquet", choices=["csv", "parquet", "json"]
+    )
 
     # quote
     p = sub.add_parser("quote", help="Real-time quote via pytdx")
@@ -925,7 +978,15 @@ def resolve_data_path(args: argparse.Namespace) -> argparse.Namespace:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    if args.data_path and args.command in ("parse", "export", "import", "batch", "formula", "finance", "block"):
+    if args.data_path and args.command in (
+        "parse",
+        "export",
+        "import",
+        "batch",
+        "formula",
+        "finance",
+        "block",
+    ):
         args = resolve_data_path(args)
 
     match args.command:

@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-
 # ---------------------------------------------------------------------------
 # Binary format constants
 # ---------------------------------------------------------------------------
@@ -39,6 +38,7 @@ TDX_STRUCT = struct.Struct("<I I I I I f I 4x")
 # ---------------------------------------------------------------------------
 # Data class
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class DayBar:
@@ -72,6 +72,7 @@ class DayBar:
 # Parser
 # ---------------------------------------------------------------------------
 
+
 def iter_records(path: Path) -> Iterator[DayBar]:
     """Yield DayBar records from a TDX binary file, oldest first."""
     raw = path.read_bytes()
@@ -96,9 +97,12 @@ def iter_records(path: Path) -> Iterator[DayBar]:
 # Output formatters
 # ---------------------------------------------------------------------------
 
+
 def print_table(records: list[DayBar]) -> None:
-    header = (f"{'Date':>10}  {'Open':>10}  {'High':>10}  "
-              f"{'Low':>10}  {'Close':>10}  {'Amount':>14}  {'Volume':>12}")
+    header = (
+        f"{'Date':>10}  {'Open':>10}  {'High':>10}  "
+        f"{'Low':>10}  {'Close':>10}  {'Amount':>14}  {'Volume':>12}"
+    )
     sep = "-" * len(header)
     print(header)
     print(sep)
@@ -117,7 +121,16 @@ def write_csv(records: list[DayBar], out: Path) -> None:
     with out.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(
             fh,
-            fieldnames=["date", "date_iso", "open", "high", "low", "close", "amount", "volume"],
+            fieldnames=[
+                "date",
+                "date_iso",
+                "open",
+                "high",
+                "low",
+                "close",
+                "amount",
+                "volume",
+            ],
         )
         writer.writeheader()
         writer.writerows(r.dict() for r in records)
@@ -128,14 +141,19 @@ def write_csv(records: list[DayBar], out: Path) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Parse a TDX binary file and print its contents.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("file", type=Path, help="Path to .day / .lc1 / .lc5 file")
-    p.add_argument("--csv", type=Path, metavar="PATH",
-                   help="Write records to CSV file instead of printing table")
+    p.add_argument(
+        "--csv",
+        type=Path,
+        metavar="PATH",
+        help="Write records to CSV file instead of printing table",
+    )
     return p
 
 

@@ -5,9 +5,9 @@ markitdown wrapper - 修复中文编码问题
 markitdown 对中文文件输出 GBK 编码，此脚本自动转换 UTF-8
 """
 
+import argparse
 import subprocess
 import sys
-import argparse
 
 
 def main():
